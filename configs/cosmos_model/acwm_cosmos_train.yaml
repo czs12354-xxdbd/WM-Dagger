@@ -1,0 +1,170 @@
+model_name: 'cosmos2_train'
+is_i2v: True
+report_to: None
+tracker_name: cosmos2_trainer
+
+logging_dir: logs
+output_dir: ./output_com
+pretrained_model_name_or_path:  ../Model/cosmos_predict2 #
+tokenizer_pretrained_model_name_or_path: ../Model/cosmos_predict2 #PATH_TO_PRETRAINED_WEIGHTS_OF_VAE_AND_TOKENIZER
+
+###
+train_data_class_path: data/lerobot_like_dataset.py
+train_data_class: CustomLeRobotDataset
+val_data_class_path: data/lerobot_like_dataset.py
+val_data_class: CustomLeRobotDataset
+
+###
+tokenizer_class_path: transformers
+tokenizer_class: T5TokenizerFast
+textenc_class_path: transformers
+textenc_class: T5EncoderModel
+vae_class_path: models/cosmos_models/models/autoencoders/autoencoder_kl_wan.py
+vae_class: AutoencoderKLWan
+diffusion_model_class_path: models/cosmos_models/models/transformers/transformer_cosmos_multiview.py
+diffusion_model_class: MultiViewCosmosTransformer3DModel
+diffusion_scheduler_class_path: models/pipeline/gesim_cosmos2_pipeline_utils/scheduling_flow_match_euler_discrete.py
+diffusion_scheduler_class: FlowMatchEulerDiscreteScheduler
+
+pipeline_class_path: models/pipeline/gesim_pipeline.py
+pipeline_class: GeSimCosmos2Pipeline
+
+
+#
+return_action: false
+return_video: true
+train_mode: 'video_only'
+action_loss_scale: 1.0
+action_cond_mode: true
+
+# total training step is decided by the minimum of the below two
+train_steps: 3000000
+train_epochs: 10000000
+steps_to_save: 1000
+steps_to_log: 20
+steps_to_val: 1  ##########
+
+mixed_precision: bf16
+allow_tf32: False
+
+# timeout, seconds
+nccl_timeout: 600
+seed: 42
+
+# vae
+enable_slicing: True
+enable_tiling: True
+
+caption_dropout_p: 0.06
+
+# dataloader
+batch_size: 4 #4
+dataloader_num_workers: 8
+pin_memory: True
+
+gradient_checkpointing: True
+noise_to_first_frame: 0.1
+
+# Optimizer Config
+optimizer: adamw
+lr: 3e-5
+beta1: 0.9
+beta2: 0.95
+beta3: 0.999
+epsilon: 1e-8
+weight_decay: 1e-5
+optimizer_8bit: False
+optimizer_torchao: False
+scale_lr: False
+
+max_grad_norm: 1.0
+gradient_accumulation_steps: 1
+
+# lr_scheduler Config
+lr_scheduler: constant_with_warmup
+lr_warmup_steps: 1000
+lr_num_cycles: 1
+lr_power: 1.0
+
+# Timestep Config
+flow_weighting_scheme: none
+flow_logit_mean: 0.0
+flow_logit_std: 1.0
+flow_mode_scale: 1.29
+
+pixel_wise_timestep: False
+
+
+diffusion_model:
+  model_path: ./output/2026_04_10_02_54_56/step_11000/diffusion_pytorch_model.safetensors #./output/2026_03_19_22_39_30/step_21000/diffusion_pytorch_model.safetensors #Genie-Envisioner/output/2026_03_19_22_39_30/Validation_step_21000        ./output/2026_02_12_04_54_35/step_1000/diffusion_pytorch_model.safetensors       #../Model/ge_sim_cosmos_v0.1.safetensors  #./output/2025_12_08_17_29_13/step_2000/diffusion_pytorch_model.safetensors   #../Model/ge_sim_cosmos_v0.1.safetensors
+
+  config:
+    in_channels: 26  # 16 (vae) + 3 (traj) + 6 (raymap) + 1 (padding mask)
+    out_channels: 16
+    num_attention_heads: 16
+    attention_head_dim: 128
+    num_layers: 28
+    mlp_ratio: 4.0
+    text_embed_dim: 1024
+    adaln_lora_dim: 256
+    max_size: [128, 240, 240]
+    patch_size: [1, 2, 2]
+    rope_scale: [1.0, 3.0, 3.0]
+    concat_padding_mask: true  # TODO: no idea how does this work
+    extra_pos_embed_type: null
+    use_view_embed: true
+    action_expert: false
+    action_in_channels: 7
+    action_num_attention_heads: 16
+    action_attention_head_dim: 32
+    action_rope_dim: 32
+
+
+data:
+  train:
+    data_roots: ["/mnt/workspace/data"]
+    domains: ["lerobot_demo_foldtowel_03251400"]
+    sample_size: [384, 512]
+    sample_n_frames: 360
+    preprocess :  'resize'
+    valid_cam :  ['images.bgr_fixed']
+    chunk: 30 ### 4n+1 for cosmos without padding frames
+    action_chunk: 30
+    n_previous: 4
+    previous_pick_mode: 'random'
+    random_crop: False
+    dataset_info_cache_path: "./output/train.log"
+
+  val:
+    data_roots: ["/mnt/workspace/data"]
+    domains: ["lerobot_demo_foldtowel_03251400"]
+    sample_size: [384, 512]
+    sample_n_frames: 360
+    preprocess :  'resize'
+    valid_cam :  ['images.bgr_fixed']
+    chunk: 25
+    action_chunk: 25
+    n_previous: 4
+    previous_pick_mode: 'random'
+    random_crop: False
+    dataset_info_cache_path: "./output/val.log"
+
+use_color_jitter: true
+num_inference_step: 15 #15
+noisy_video: true
+
+
+load_weights: true
+
+# deepspeed config
+use_deepspeed: true #true
+deepspeed:
+  zero_optimization:
+    stage: 2
+    # offload_optimizer:
+    #   device: cpu
+  fp16:
+    enabled: false
+  bf16:
+    enabled: true
+  gradient_clipping: 1.0
